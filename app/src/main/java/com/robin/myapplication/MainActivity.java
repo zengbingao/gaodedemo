@@ -1,19 +1,13 @@
 package com.robin.myapplication;
 
 import android.Manifest;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
-import android.view.KeyEvent;
+import android.widget.Toast;
 
 import com.amap.api.maps.AMap;
 import com.amap.api.maps.CameraUpdate;
@@ -22,18 +16,33 @@ import com.amap.api.maps.MapView;
 import com.amap.api.maps.UiSettings;
 import com.amap.api.maps.model.MyLocationStyle;
 
-import java.util.ArrayList;
 import java.util.List;
+
+import pub.devrel.easypermissions.AfterPermissionGranted;
+import pub.devrel.easypermissions.AppSettingsDialog;
+import pub.devrel.easypermissions.EasyPermissions;
 
 import static com.robin.myapplication.R.id.map;
 
 public class MainActivity extends AppCompatActivity implements
-        ActivityCompat.OnRequestPermissionsResultCallback {
+        ActivityCompat.OnRequestPermissionsResultCallback,
+        EasyPermissions.PermissionCallbacks {
     private static final String TAG = "MainActivity";
     MapView mMapView;
     AMap aMap;
     MyLocationStyle myLocationStyle;
     UiSettings uiSettings;
+    Bundle savedInstanceState;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        mMapView = (MapView) findViewById(map);
+        this.savedInstanceState = savedInstanceState;
+        checkPermissions1(needPermissions);
+    }
+
     /**
      * 需要进行检测的权限数组
      */
@@ -46,16 +55,48 @@ public class MainActivity extends AppCompatActivity implements
     };
     private static final int PERMISSON_REQUESTCODE = 0;
 
-    /**
-     * 判断是否需要检测，防止不停的弹框
-     */
-    private boolean isNeedCheck = true;
-
+    private void checkPermissions1(String[] strings) {
+        if(ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)!= PackageManager.PERMISSION_GRANTED||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)!= PackageManager.PERMISSION_GRANTED||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)!= PackageManager.PERMISSION_GRANTED||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)!= PackageManager.PERMISSION_GRANTED||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)!= PackageManager.PERMISSION_GRANTED
+                ){
+            Toast.makeText(MainActivity.this, "没获通过申请,需要申请权限", Toast.LENGTH_SHORT).show();
+            ActivityCompat.requestPermissions(this, strings, PERMISSON_REQUESTCODE);
+        }
+    }
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        mMapView = (MapView) findViewById(map);
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        Toast.makeText(this,"permissions=="+permissions+"--grantResults"+grantResults,Toast.LENGTH_LONG).show();
+        if (requestCode == PERMISSON_REQUESTCODE) {
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(MainActivity.this, "回调，成功", Toast.LENGTH_SHORT).show();
+                initmap(savedInstanceState);
+            } else {
+                // Permission Denied
+                Toast.makeText(MainActivity.this, "回调，失败", Toast.LENGTH_SHORT).show();
+                new AppSettingsDialog.Builder(this).build().show();
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+    
+    @AfterPermissionGranted(PERMISSON_REQUESTCODE)
+    private void checkPermissions(String[] strings, Bundle savedInstanceState) {
+        if (EasyPermissions.hasPermissions(this, strings)) {
+            Toast.makeText(this, "已获取权限", Toast.LENGTH_LONG).show();
+            initmap(savedInstanceState);
+        } else {
+            Toast.makeText(this, "没有获取权限，需要请求", Toast.LENGTH_LONG).show();
+            EasyPermissions.requestPermissions(this, "必要的权限", PERMISSON_REQUESTCODE, strings);
+        }
+    }
+
+    private void initmap(Bundle savedInstanceState) {
+
+
         mMapView.onCreate(savedInstanceState);// 此方法必须重写
         if (aMap == null) {
             aMap = mMapView.getMap();
@@ -75,130 +116,26 @@ public class MainActivity extends AppCompatActivity implements
         uiSettings.setScaleControlsEnabled(true);
         aMap.setMyLocationEnabled(true);// 设置为true表示启动显示定位蓝点，false表示隐藏定位蓝点并不进行定位，默认是false。
         aMap.showIndoorMap(true);
-        CameraUpdate mCameraUpdate = CameraUpdateFactory.zoomTo(3);
+        CameraUpdate mCameraUpdate = CameraUpdateFactory.zoomTo(17);
 
         aMap.moveCamera(mCameraUpdate);
-//        aMap.setTrafficEnabled(true);
-//        aMap.setLocationSource(new LocationSource() {
-//            @Override
-//            public void activate(OnLocationChangedListener onLocationChangedListener) {
-//                Log.i(TAG, "activate: ");
-//            }
-//
-//            @Override
-//            public void deactivate() {
-//                Log.i(TAG, "deactivate: ");
-//            }
-//        });
-
     }
 
-    /**
-     * @param permissions
-     * @since 2.5.0
-     */
-    private void checkPermissions(String... permissions) {
-        List<String> needRequestPermissonList = findDeniedPermissions(permissions);
-        if (null != needRequestPermissonList && needRequestPermissonList.size() > 0) {
-            ActivityCompat.requestPermissions(this,needRequestPermissonList.toArray(new String[needRequestPermissonList.size()]),PERMISSON_REQUESTCODE);
-        }
-    }
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+//        //把申请权限的回调交由EasyPermissions处理  
+//        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
+//    }
 
-    /**
-     * 获取权限集中需要申请权限的列表
-     *
-     * @param permissions
-     * @return
-     * @since 2.5.0
-     */
-    private List<String> findDeniedPermissions(String[] permissions) {
-        List<String> needRequestPermissonList = new ArrayList<String>();
-        for (String perm : permissions) {
-            if (ContextCompat.checkSelfPermission(this,perm) != PackageManager.PERMISSION_GRANTED|| ActivityCompat.shouldShowRequestPermissionRationale(this, perm)) {
-                needRequestPermissonList.add(perm);
-            }
-        }
-        return needRequestPermissonList;
+    @Override
+    public void onPermissionsGranted(int requestCode, List<String> perms) {
+        Toast.makeText(this, "获取成功的权限" + perms.get(0), Toast.LENGTH_LONG).show();
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode== PERMISSON_REQUESTCODE){
-            Log.i(TAG, "onRequestPermissionsResult: 通过了");
-        }else{
-            Log.i(TAG, "onRequestPermissionsResult: 没通过");
-            showMissingPermissionDialog();
-        }
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    }
-
-    /**
-     * 检测是否说有的权限都已经授权
-     *
-     * @param grantResults
-     * @return
-     * @since 2.5.0
-     */
-    private boolean verifyPermissions(int[] grantResults) {
-        for (int result : grantResults) {
-            if (result != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * 显示提示信息
-     *
-     * @since 2.5.0
-     */
-    private void showMissingPermissionDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("通知的标题");
-        builder.setMessage("通知的内容");
-
-        // 拒绝, 退出应用
-        builder.setNegativeButton("取消",
-                new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        finish();
-                    }
-                });
-
-        builder.setPositiveButton("设置",
-                new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        startAppSettings();
-                    }
-                });
-
-        builder.setCancelable(false);
-
-        builder.show();
-    }
-
-    /**
-     * 启动应用的设置
-     *
-     * @since 2.5.0
-     */
-    private void startAppSettings() {
-        Intent intent = new Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-        intent.setData(Uri.parse("package:" + getPackageName()));
-        startActivity(intent);
-    }
-
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            this.finish();
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
+    public void onPermissionsDenied(int requestCode, List<String> perms) {
+        Toast.makeText(this, "获取失败的权限" + perms.get(0), Toast.LENGTH_LONG).show();
     }
 
     @Override
@@ -213,9 +150,6 @@ public class MainActivity extends AppCompatActivity implements
         super.onResume();
         //在activity执行onResume时执行mMapView.onResume ()，重新绘制加载地图
         mMapView.onResume();
-        if (isNeedCheck) {
-            checkPermissions(needPermissions);
-        }
     }
 
     @Override
@@ -231,4 +165,5 @@ public class MainActivity extends AppCompatActivity implements
         //在activity执行onSaveInstanceState时执行mMapView.onSaveInstanceState (outState)，保存地图当前的状态
         mMapView.onSaveInstanceState(outState);
     }
+
 }
